@@ -109,7 +109,8 @@ class Config {
   get app() {
     return {
       nodeEnv: process.env.NODE_ENV || 'development',
-      outputDir: process.env.OUTPUT_DIR || './output'
+      outputDir: process.env.OUTPUT_DIR || './output',
+      timezone: process.env.TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone
     };
   }
 
