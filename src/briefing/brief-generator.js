@@ -6,6 +6,8 @@ const { format } = require('date-fns');
 class BriefGenerator {
   constructor() {
     this.anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim();
+    this.enableThinking = process.env.CLAUDE_THINKING_MODE === 'true' || false;
+    this.thinkingTokens = parseInt(process.env.CLAUDE_THINKING_TOKENS) || 8000;
   }
 
   async initialize() {
@@ -24,7 +26,11 @@ class BriefGenerator {
     try {
       const promptPath = path.join(__dirname, '..', '..', 'prompts', 'daily-brief.txt');
       this.promptTemplate = await fs.readFile(promptPath, 'utf8');
-      console.log('✅ Brief generator initialized with Claude API and prompt template');
+      
+      const thinkingStatus = this.enableThinking ? 
+        `thinking mode enabled (${this.thinkingTokens} tokens)` : 
+        'thinking mode disabled';
+      console.log(`✅ Brief generator initialized with Claude API and prompt template (${thinkingStatus})`);
     } catch (error) {
       throw new Error(`Failed to load prompt template: ${error.message}`);
     }
@@ -35,12 +41,18 @@ class BriefGenerator {
   async callClaude(prompt) {
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: this.enableThinking ? 'claude-sonnet-4-20250514' : 'claude-3-5-sonnet-20241022',
         max_tokens: 4000,
         messages: [{
           role: 'user',
           content: prompt
-        }]
+        }],
+        ...(this.enableThinking && {
+          thinking: {
+            type: 'enabled',
+            budget_tokens: this.thinkingTokens
+          }
+        })
       });
 
       const options = {
@@ -52,7 +64,10 @@ class BriefGenerator {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
           'x-api-key': this.anthropicApiKey,
-          'anthropic-version': '2023-06-01'
+          'anthropic-version': '2023-06-01',
+          ...(this.enableThinking && {
+            'anthropic-beta': 'interleaved-thinking-2025-05-14'
+          })
         }
       };
 
@@ -66,8 +81,24 @@ class BriefGenerator {
               reject(new Error(`Claude API error: ${response.error?.message || data}`));
               return;
             }
-            if (response.content && response.content[0] && response.content[0].text) {
-              resolve(response.content[0].text);
+            // Log thinking mode usage
+            if (this.enableThinking) {
+              const thinkingContent = response.content.find(item => item.type === 'thinking');
+              if (thinkingContent) {
+                console.log('🧠 Extended thinking used successfully');
+              }
+            }
+            if (response.content && response.content.length > 0) {
+              // In thinking mode, find the text content (not thinking content)
+              const textContent = response.content.find(item => item.type === 'text');
+              if (textContent && textContent.text) {
+                resolve(textContent.text);
+              } else if (response.content[0] && response.content[0].text) {
+                // Fallback for non-thinking mode
+                resolve(response.content[0].text);
+              } else {
+                reject(new Error('Unexpected response format from Claude API'));
+              }
             } else {
               reject(new Error('Unexpected response format from Claude API'));
             }
@@ -81,7 +112,8 @@ class BriefGenerator {
         reject(new Error(`Claude API request failed: ${error.message}`));
       });
 
-      req.setTimeout(30000, () => {
+      const timeout = this.enableThinking ? 120000 : 30000; // 2 minutes for thinking mode, 30s otherwise
+      req.setTimeout(timeout, () => {
         req.destroy();
         reject(new Error('Claude API request timeout'));
       });
