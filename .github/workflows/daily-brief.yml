@@ -28,21 +28,7 @@ jobs:
         run: npm ci
 
       - name: Generate Daily Brief
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            Generate today's daily briefing using the enhanced AI-powered application.
-            
-            Instructions:
-            1. Run `node src/index.js` to generate the daily brief
-            2. The system will try AI synthesis first, then fallback to template if needed
-            3. If there are any errors, troubleshoot and fix them
-            4. Check the output for "TEMPLATE-GENERATED" warnings (indicates AI synthesis failed)
-            5. Ensure the brief is generated successfully with calendar events and tasks
-            
-            The application connects to Google Calendar, Todoist, and Anthropic APIs using environment variables.
-          claude_args: "--model claude-3-5-haiku-latest"
+        run: node src/index.js
         env:
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
@@ -51,6 +37,14 @@ jobs:
           TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NODE_ENV: production
+
+      - name: Read Brief Content
+        id: brief
+        run: |
+          BRIEF_CONTENT=$(cat output/daily-brief-*.html)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$BRIEF_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Send Daily Brief Email
         uses: dawidd6/action-send-mail@v6
@@ -64,13 +58,12 @@ jobs:
           to: ${{ secrets.EMAIL_RECIPIENT }}
           from: Daily Brief Bot
           body: |
-            Your daily brief has been generated successfully!
-
-            Generated on: ${{ github.event.head_commit.timestamp }}
-            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            The brief has been attached to this email and is also available as a workflow artifact.
-          attachments: output/*.md
+            ${{ steps.brief.outputs.content }}
+          html: |
+            ${{ steps.brief.outputs.content }}
+            <hr>
+            <p><small>Generated on: ${{ github.event.head_commit.timestamp }}<br>
+            Workflow run: <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Details</a></small></p>
           convert_markdown: false
 
       - name: Upload Brief as Artifact
@@ -80,7 +73,7 @@ jobs:
           name: daily-brief-${{ github.run_number }}
           path: |
             output/
-            *.md
+            *.html
           retention-days: 30
 
       - name: Send Notification on Failure
