@@ -41,10 +41,35 @@ jobs:
       - name: Read Brief Content
         id: brief
         run: |
-          BRIEF_CONTENT=$(cat output/daily-brief-*.html)
+          # Use base64 encoding to preserve HTML content exactly
+          BRIEF_CONTENT=$(cat output/daily-brief-*.html | base64 -w 0)
+          echo "content_base64=$BRIEF_CONTENT" >> $GITHUB_OUTPUT
+          
+          # Also save raw content for debugging
           echo "content<<EOF" >> $GITHUB_OUTPUT
-          echo "$BRIEF_CONTENT" >> $GITHUB_OUTPUT
+          cat output/daily-brief-*.html >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Prepare Email Content
+        id: prepare
+        run: |
+          # Decode the base64 content and save to file
+          echo "${{ steps.brief.outputs.content_base64 }}" | base64 -d > email_content.html
+          
+          # Debug: Show first few lines of HTML content
+          echo "Debug: First 20 lines of HTML content:"
+          head -20 email_content.html
+          
+          # Add footer to HTML (insert before closing body tag)
+          sed -i 's|</body>|<hr style="margin: 20px 0; border: none; border-top: 1px solid #ccc;"><p style="font-size: 12px; color: #666; text-align: center;"><small>Generated on: ${{ github.event.head_commit.timestamp }}<br>Workflow run: <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Details</a></small></p></body>|' email_content.html
+          
+          # Debug: Verify HTML structure after footer addition
+          echo "Debug: Last 10 lines after footer addition:"
+          tail -10 email_content.html
+          
+          # Extract date for subject
+          TODAY=$(date +"%B %d, %Y")
+          echo "email_date=$TODAY" >> $GITHUB_OUTPUT
 
       - name: Send Daily Brief Email
         uses: dawidd6/action-send-mail@v6
@@ -54,16 +79,10 @@ jobs:
           server_port: 465
           username: ${{ secrets.GMAIL_USERNAME }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "Daily Brief - ${{ github.run_number }}"
+          subject: "Daily Brief - ${{ steps.prepare.outputs.email_date }}"
           to: ${{ secrets.EMAIL_RECIPIENT }}
-          from: Daily Brief Bot
-          body: |
-            ${{ steps.brief.outputs.content }}
-          html: |
-            ${{ steps.brief.outputs.content }}
-            <hr>
-            <p><small>Generated on: ${{ github.event.head_commit.timestamp }}<br>
-            Workflow run: <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Details</a></small></p>
+          from: Daily Brief Bot <${{ secrets.GMAIL_USERNAME }}>
+          html_body: file://email_content.html
           convert_markdown: false
 
       - name: Upload Brief as Artifact
