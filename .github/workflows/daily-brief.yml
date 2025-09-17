@@ -10,6 +10,9 @@ on:
 jobs:
   generate-brief:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     
     steps:
       - name: Checkout repository
