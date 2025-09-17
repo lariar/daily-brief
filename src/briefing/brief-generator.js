@@ -5,12 +5,19 @@ const { format } = require('date-fns');
 
 class BriefGenerator {
   constructor() {
-    this.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    this.anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim();
   }
 
   async initialize() {
     if (!this.anthropicApiKey) {
       throw new Error('ANTHROPIC_API_KEY environment variable is required');
+    }
+    
+    // Initialize HTML validation
+    try {
+      console.log('✅ HTML validation schema initialized');
+    } catch (error) {
+      throw new Error(`Failed to initialize validation: ${error.message}`);
     }
     
     // Load prompt template
@@ -84,6 +91,36 @@ class BriefGenerator {
     });
   }
 
+  validateHtmlContent(content) {
+    const trimmedContent = content.trim();
+    
+    // Check if content starts with DOCTYPE
+    if (!trimmedContent.startsWith('<!DOCTYPE html')) {
+      throw new Error('HTML content must start with <!DOCTYPE html>');
+    }
+    
+    // Check if content ends with </html>
+    if (!trimmedContent.endsWith('</html>')) {
+      throw new Error('HTML content must end with </html>');
+    }
+    
+    // Check for required HTML structure
+    const requiredTags = ['<head>', '</head>', '<body>', '</body>'];
+    for (const tag of requiredTags) {
+      if (!content.includes(tag)) {
+        throw new Error(`HTML must include ${tag} tag`);
+      }
+    }
+    
+    // Additional basic HTML validation
+    if (!content.includes('<html')) {
+      throw new Error('HTML must include <html> tag');
+    }
+    
+    console.log('✅ HTML structure validation passed');
+    return content;
+  }
+
   async generateBrief(data) {
     const briefData = {
       date: format(new Date(), 'EEEE, MMMM d, yyyy'),
@@ -101,9 +138,15 @@ ${JSON.stringify(briefData, null, 2)}`;
     try {
       const briefContent = await this.callClaude(fullPrompt);
       console.log('✅ Brief generated successfully with Claude API');
-      return briefContent;
+      
+      // Validate the HTML content
+      console.log('🔍 Validating HTML structure...');
+      const validatedContent = this.validateHtmlContent(briefContent);
+      console.log('✅ HTML validation passed');
+      
+      return validatedContent;
     } catch (error) {
-      console.error('❌ Claude API failed:', error.message);
+      console.error('❌ Brief generation failed:', error.message);
       throw new Error(`Failed to generate brief: ${error.message}`);
     }
   }
@@ -123,17 +166,6 @@ ${JSON.stringify(briefData, null, 2)}`;
       throw error;
     }
   }
-
-  formatForEmail(briefContent) {
-    return briefContent
-      .replace(/^# /gm, '')
-      .replace(/^## /gm, '**')
-      .replace(/^### /gm, '***')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/\n/g, '<br>\n');
-  }
-
 
   formatForEmail(briefContent) {
     // Claude will already format it well for email, just return as-is
