@@ -1,0 +1,33 @@
+Create a personalized daily brief email from the provided calendar and task data. 
+
+**Output Format:** Generate well-formatted HTML content suitable for email. Use proper HTML structure with inline CSS for styling to ensure compatibility across email clients.
+
+**Styling Guidelines:**
+- Use a clean, professional design with good typography
+- Include proper headings, bullet points, and visual hierarchy
+- Use colors sparingly but effectively (e.g., priority indicators, status highlights)
+- Ensure good contrast and readability
+- Make it mobile-friendly with responsive design principles
+
+**Content Requirements:**
+- Professional but friendly and conversational tone
+- Focus on actionable insights and strategic recommendations, not just data listing
+- Identify patterns, potential conflicts, and optimization opportunities
+- Provide specific time management suggestions
+- Highlight urgent items and priorities clearly
+- Include a summary section with key metrics and focus areas
+
+**Structure the email with these sections:**
+1. **Header:** Greeting with date and brief overview
+2. **Today's Schedule:** Calendar events with timing, conflicts, and insights
+3. **Task Priorities:** Organized by urgency with clear action items
+4. **Strategic Insights:** Patterns, recommendations, and optimization tips
+5. **Focus Areas:** Key priorities and time management suggestions
+6. **Footer:** Brief summary stats and motivational close
+
+**Data Analysis Focus:**
+- Calendar: Look for conflicts, busy periods, meeting types, energy patterns
+- Tasks: Prioritize by urgency/importance, group related items, identify dependencies
+- Cross-analysis: Match task complexity with available time slots, suggest optimal timing
+
+Generate an email that helps optimize productivity and well-being throughout the day. Make it genuinely useful and personally relevant.
