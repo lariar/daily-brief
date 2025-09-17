@@ -1,0 +1,95 @@
+# Daily Brief - {{date}}
+
+## 📅 Today's Schedule
+
+{{#if schedule.combined.length}}
+{{#each schedule.combined}}
+**{{formatTime start}}** - {{title}}
+{{#if location}}📍 {{location}}{{/if}}
+{{#if description}}
+  > {{description}}
+{{/if}}
+{{#unless @last}}
+
+{{/unless}}
+{{/each}}
+{{else}}
+🗓️ No events scheduled for today.
+{{/if}}
+
+{{#if schedule.analysis.conflicts.length}}
+## ⚠️ Schedule Conflicts
+{{#each schedule.analysis.conflicts}}
+- **{{formatTime time}}**: {{event1}} conflicts with {{event2}}
+{{/each}}
+{{/if}}
+
+{{#if schedule.analysis.busyPeriods.length}}
+## 🏃‍♂️ Busy Periods
+{{#each schedule.analysis.busyPeriods}}
+- **{{formatTime start}} - {{formatTime end}}**: {{join events ", "}}
+{{/each}}
+{{/if}}
+
+## ✅ Tasks & Priorities
+
+{{#if tasks}}
+{{#if tasks.overdue.tasks.length}}
+### 🚨 Overdue Tasks ({{tasks.overdue.tasks.length}})
+{{#each tasks.overdue.tasks}}
+- **{{content}}** {{#if due}}(Due: {{due.string}}){{/if}}
+  {{#if description}}{{description}}{{/if}}
+{{/each}}
+{{/if}}
+
+{{#if tasks.today.tasks.length}}
+### 📋 Today's Tasks ({{tasks.today.tasks.length}})
+{{#each tasks.today.tasks}}
+- **{{content}}** {{getPriorityEmoji priority}}
+  {{#if description}}{{description}}{{/if}}
+  {{#if labels.length}}🏷️ {{join labels ", "}}{{/if}}
+{{/each}}
+{{/if}}
+
+{{#if tasks.highPriority.tasks.length}}
+### 🔥 High Priority Tasks
+{{#each tasks.highPriority.tasks}}
+- **{{content}}** {{getPriorityEmoji priority}}
+  {{#if due}}📅 {{due.string}}{{/if}}
+{{/each}}
+{{/if}}
+
+### 📊 Task Summary
+- **Total tasks today**: {{tasks.today.analysis.total}}
+- **Overdue**: {{tasks.overdue.analysis.total}}
+- **High/Urgent priority**: {{add tasks.today.analysis.byPriority.high tasks.today.analysis.byPriority.urgent}}
+{{#if tasks.today.analysis.projects.length}}
+- **Active projects**: {{tasks.today.analysis.projects.length}}
+{{/if}}
+
+{{else}}
+📝 No task data available.
+{{/if}}
+
+{{#if insights.length}}
+## 💡 Insights & Recommendations
+
+{{#each insights}}
+{{getInsightEmoji type}} {{message}}
+{{/each}}
+{{/if}}
+
+## 📈 Day Overview
+
+{{#if schedule.analysis.meetingHours}}
+- **Meeting time**: {{round schedule.analysis.meetingHours 1}} hours
+{{/if}}
+{{#if schedule.combined.length}}
+- **Total events**: {{schedule.combined.length}}
+{{/if}}
+{{#if tasks}}
+- **Focus areas**: {{#if tasks.today.byProject}}{{getTopProjects tasks.today.byProject}}{{else}}General tasks{{/if}}
+{{/if}}
+
+---
+*Generated at {{timestamp}} with ❤️ by Daily Brief*
