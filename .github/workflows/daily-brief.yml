@@ -58,37 +58,91 @@ jobs:
       - name: Prepare Email Content
         id: prepare
         run: |
-          # Decode the base64 content and save to file
+          # Decode the base64 content
           echo "${{ steps.brief.outputs.content_base64 }}" | base64 -d > email_content.html
           
           # Debug: Show first few lines of HTML content
-          echo "Debug: First 20 lines of HTML content:"
-          head -20 email_content.html
+          echo "Debug: First 10 lines of HTML content:"
+          head -10 email_content.html
           
           # Add footer to HTML (insert before closing body tag)
           sed -i 's|</body>|<hr style="margin: 20px 0; border: none; border-top: 1px solid #ccc;"><p style="font-size: 12px; color: #666; text-align: center;"><small>Generated on: ${{ github.event.head_commit.timestamp }}<br>Workflow run: <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Details</a></small></p></body>|' email_content.html
           
-          # Debug: Verify HTML structure after footer addition
-          echo "Debug: Last 10 lines after footer addition:"
-          tail -10 email_content.html
+          # Encode the final HTML content for inline use (avoiding file reference issues)
+          FINAL_HTML_CONTENT=$(cat email_content.html | base64 -w 0)
+          echo "final_html_base64=$FINAL_HTML_CONTENT" >> $GITHUB_OUTPUT
           
           # Extract date for subject
           TODAY=$(date +"%B %d, %Y")
           echo "email_date=$TODAY" >> $GITHUB_OUTPUT
+          
+          # Debug: Show final HTML size
+          echo "Final HTML size: $(cat email_content.html | wc -c) characters"
 
-      - name: Send Daily Brief Email
-        uses: dawidd6/action-send-mail@v6
-        if: success()
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.GMAIL_USERNAME }}
-          password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "Daily Brief - ${{ steps.prepare.outputs.email_date }}"
-          to: ${{ secrets.EMAIL_RECIPIENT }}
-          from: Daily Brief Bot <${{ secrets.GMAIL_USERNAME }}>
-          html_body: file://email_content.html
-          convert_markdown: false
+      - name: Decode and Send Email  
+        run: |
+          # Decode the final HTML content
+          echo "${{ steps.prepare.outputs.final_html_base64 }}" | base64 -d > final_email.html
+          
+          # Debug: Show that we have valid HTML
+          echo "=== Final HTML Content Preview ==="
+          head -5 final_email.html
+          echo "..."
+          tail -5 final_email.html
+          echo "=== End Preview ==="
+
+      - name: Send Daily Brief Email via Python
+        run: |
+          # Create Python email script (inline to avoid file management issues)
+          python3 -c "
+          import smtplib
+          import ssl
+          from email.mime.text import MIMEText
+          from email.mime.multipart import MIMEMultipart
+          import os
+          
+          # Read HTML content
+          with open('final_email.html', 'r', encoding='utf-8') as f:
+              html_content = f.read()
+          
+          # Email configuration
+          smtp_server = 'smtp.gmail.com'
+          port = 587
+          sender_email = os.environ['GMAIL_USERNAME']
+          password = os.environ['GMAIL_APP_PASSWORD']
+          receiver_email = os.environ['EMAIL_RECIPIENT']
+          subject = 'Daily Brief - ' + os.environ['EMAIL_DATE']
+          
+          print(f'📤 Sending HTML email...')
+          print(f'   From: {sender_email}')
+          print(f'   To: {receiver_email}')
+          print(f'   Subject: {subject}')
+          print(f'   HTML content length: {len(html_content)} characters')
+          
+          # Create message
+          message = MIMEMultipart('alternative')
+          message['Subject'] = subject
+          message['From'] = f'Daily Brief Bot <{sender_email}>'
+          message['To'] = receiver_email
+          
+          # Create HTML part
+          html_part = MIMEText(html_content, 'html')
+          message.attach(html_part)
+          
+          # Send email
+          context = ssl.create_default_context()
+          with smtplib.SMTP(smtp_server, port) as server:
+              server.starttls(context=context)
+              server.login(sender_email, password)
+              server.sendmail(sender_email, receiver_email, message.as_string())
+          
+          print('✅ HTML email sent successfully!')
+          "
+        env:
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+          EMAIL_DATE: ${{ steps.prepare.outputs.email_date }}
 
       - name: Upload Brief as Artifact
         uses: actions/upload-artifact@v4
