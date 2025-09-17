@@ -41,14 +41,19 @@ jobs:
       - name: Read Brief Content
         id: brief
         run: |
-          # Use base64 encoding to preserve HTML content exactly
-          BRIEF_CONTENT=$(cat output/daily-brief-*.html | base64 -w 0)
-          echo "content_base64=$BRIEF_CONTENT" >> $GITHUB_OUTPUT
-          
-          # Also save raw content for debugging
-          echo "content<<EOF" >> $GITHUB_OUTPUT
-          cat output/daily-brief-*.html >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Check if HTML file exists
+          if ls output/daily-brief-*.html 1> /dev/null 2>&1; then
+            echo "Found HTML file(s):"
+            ls -la output/daily-brief-*.html
+            
+            # Use base64 encoding to preserve HTML content exactly
+            BRIEF_CONTENT=$(cat output/daily-brief-*.html | base64 -w 0)
+            echo "content_base64=$BRIEF_CONTENT" >> $GITHUB_OUTPUT
+            echo "Base64 content length: ${#BRIEF_CONTENT}"
+          else
+            echo "ERROR: No HTML file found in output directory"
+            exit 1
+          fi
 
       - name: Prepare Email Content
         id: prepare
