@@ -55,6 +55,28 @@ The application uses OAuth 2.0 for Google Calendar and API tokens for Todoist:
 
 Required environment variables are documented in `.env.example`.
 
+## Claude Thinking Mode
+
+This application supports Claude's thinking mode for enhanced reasoning and analysis. When enabled, Claude will use extended thinking to provide more thoughtful insights in your daily briefs.
+
+### Configuration
+
+Set these environment variables in your `.env` file:
+
+```bash
+# Enable thinking mode (true/false)
+CLAUDE_THINKING_MODE=true
+
+# Thinking token budget (1000-32000, default: 8000)
+CLAUDE_THINKING_TOKENS=8000
+```
+
+### Cost Considerations
+
+- **Thinking mode disabled**: Standard Claude 3.5 Sonnet pricing ($3/$15 per million input/output tokens)
+- **Thinking mode enabled**: Same pricing, but thinking tokens are included in the output token count
+- **Recommended budget**: 8000 tokens provides good balance between cost and reasoning depth
+
 ## GitHub Actions Integration
 
 The project runs automatically via GitHub Actions (`daily-brief.yml`) at 9:00 AM UTC daily. The workflow:
