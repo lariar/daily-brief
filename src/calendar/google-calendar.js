@@ -1,6 +1,8 @@
 const { google } = require('googleapis');
 const { format, startOfDay, endOfDay, addDays } = require('date-fns');
+const { toZonedTime } = require('date-fns-tz');
 const OAuthClient = require('../auth/oauth-client');
+const config = require('../utils/config');
 
 class GoogleCalendarClient {
   constructor(oauthConfig) {
@@ -97,21 +99,37 @@ class GoogleCalendarClient {
   }
 
   formatEvents(events) {
+    const timezone = config.app.timezone;
+    
     return events.map(event => {
       const start = event.start.dateTime || event.start.date;
       const end = event.end.dateTime || event.end.date;
+      
+      // Convert to local timezone if datetime, or keep as date for all-day events
+      let startDate, endDate;
+      
+      if (event.start.dateTime) {
+        // For events with time, convert to local timezone
+        startDate = toZonedTime(new Date(start), timezone);
+        endDate = toZonedTime(new Date(end), timezone);
+      } else {
+        // For all-day events, keep as date without timezone conversion
+        startDate = new Date(start);
+        endDate = new Date(end);
+      }
       
       return {
         id: event.id,
         title: event.summary || 'No title',
         description: event.description || '',
-        start: new Date(start),
-        end: new Date(end),
+        start: startDate,
+        end: endDate,
         isAllDay: !event.start.dateTime,
         location: event.location || '',
         attendees: event.attendees ? event.attendees.map(a => a.email) : [],
         status: event.status,
-        htmlLink: event.htmlLink
+        htmlLink: event.htmlLink,
+        originalTimezone: event.start.timeZone || timezone
       };
     });
   }

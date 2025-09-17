@@ -9,10 +9,16 @@ const {
   differenceInHours,
   differenceInMinutes
 } = require('date-fns');
+const { toZonedTime, formatInTimeZone } = require('date-fns-tz');
 
 class DateUtils {
-  static formatTime(date) {
+  static formatTime(date, timezone = null) {
     if (!date) return '';
+    
+    if (timezone) {
+      return formatInTimeZone(new Date(date), timezone, 'h:mm a');
+    }
+    
     return format(new Date(date), 'h:mm a');
   }
 
