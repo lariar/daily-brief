@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "dev": "node src/index.js",
     "test": "jest",
-    "test-email": "node test-email.js"
+    "test-email": "node test-email.js",
+    "send-test-email": "python3 test-send-email.py"
   },
   "keywords": [],
   "author": "",
