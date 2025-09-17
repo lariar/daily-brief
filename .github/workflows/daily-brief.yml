@@ -32,22 +32,24 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Generate today's daily briefing by running the daily brief application.
+            Generate today's daily briefing using the enhanced AI-powered application.
             
             Instructions:
             1. Run `node src/index.js` to generate the daily brief
-            2. If there are any errors, troubleshoot and fix them
-            3. Ensure the brief is generated successfully
-            4. The brief should include today's calendar events and tasks
+            2. The system will try AI synthesis first, then fallback to template if needed
+            3. If there are any errors, troubleshoot and fix them
+            4. Check the output for "TEMPLATE-GENERATED" warnings (indicates AI synthesis failed)
+            5. Ensure the brief is generated successfully with calendar events and tasks
             
-            The application connects to Google Calendar and Todoist APIs using environment variables.
-          claude_args: "--model claude-sonnet-4"
+            The application connects to Google Calendar, Todoist, and Anthropic APIs using environment variables.
+          claude_args: "--model claude-3-5-haiku-latest"
         env:
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           GOOGLE_PERSONAL_REFRESH_TOKEN: ${{ secrets.GOOGLE_PERSONAL_REFRESH_TOKEN }}
           GOOGLE_WORK_REFRESH_TOKEN: ${{ secrets.GOOGLE_WORK_REFRESH_TOKEN }}
           TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NODE_ENV: production
 
       - name: Send Daily Brief Email

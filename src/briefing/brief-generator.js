@@ -2,15 +2,34 @@ const Handlebars = require('handlebars');
 const fs = require('fs').promises;
 const path = require('path');
 const { format } = require('date-fns');
+const AISynthesisService = require('../synthesis/ai-synthesis-service');
+const config = require('../utils/config');
 
 class BriefGenerator {
   constructor() {
     this.template = null;
+    this.aiSynthesis = null;
     this.setupHelpers();
   }
 
   async initialize() {
     try {
+      // Initialize AI synthesis service if API key is available
+      const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+      if (anthropicApiKey) {
+        try {
+          this.aiSynthesis = new AISynthesisService(anthropicApiKey);
+          await this.aiSynthesis.initialize();
+          console.log('✅ AI synthesis enabled');
+        } catch (aiError) {
+          console.warn('⚠️ AI synthesis initialization failed, falling back to template:', aiError.message);
+          this.aiSynthesis = null;
+        }
+      } else {
+        console.log('ℹ️ No Anthropic API key found, using template mode');
+      }
+
+      // Always initialize template as fallback
       const templatePath = path.join(__dirname, 'templates', 'daily-brief.hbs');
       
       // Check if template file exists before attempting to read
@@ -100,10 +119,7 @@ class BriefGenerator {
   }
 
   async generateBrief(data) {
-    if (!this.template) {
-      throw new Error('Template not initialized');
-    }
-
+    // Prepare enhanced data with metadata
     const briefData = {
       date: format(new Date(), 'EEEE, MMMM d, yyyy'),
       timestamp: format(new Date(), 'h:mm a'),
@@ -111,7 +127,31 @@ class BriefGenerator {
       insights: this.generateInsights(data)
     };
 
-    return this.template(briefData);
+    // Try AI synthesis first if available
+    if (this.aiSynthesis) {
+      try {
+        console.log('🤖 Attempting AI synthesis...');
+        const aiContent = await this.aiSynthesis.synthesize(briefData);
+        
+        if (this.validateAIOutput(aiContent)) {
+          console.log('✅ AI synthesis successful');
+          return aiContent;
+        } else {
+          console.warn('⚠️ AI output failed validation, falling back to template');
+        }
+      } catch (aiError) {
+        console.error('❌ AI synthesis failed:', aiError.message);
+        console.log('🔄 Falling back to template generation');
+      }
+    }
+
+    // Fallback to template with warning
+    if (!this.template) {
+      throw new Error('Template not initialized');
+    }
+
+    const templateContent = this.template(briefData);
+    return this.addFallbackWarning(templateContent);
   }
 
   generateInsights(data) {
@@ -234,6 +274,25 @@ class BriefGenerator {
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/\n/g, '<br>\n');
+  }
+
+  validateAIOutput(content) {
+    if (!content || typeof content !== 'string') {
+      return false;
+    }
+
+    // Check for basic markdown structure
+    const hasMarkdownHeaders = /^#+ /.test(content.trim());
+    const hasReasonableLength = content.length > 200 && content.length < 8000;
+    const notEmpty = content.trim().length > 0;
+    const noFallbackWarning = !content.includes('TEMPLATE-GENERATED');
+
+    return hasMarkdownHeaders && hasReasonableLength && notEmpty && noFallbackWarning;
+  }
+
+  addFallbackWarning(templateContent) {
+    const warningBanner = `⚠️ **TEMPLATE-GENERATED BRIEF** - AI synthesis unavailable\n\n`;
+    return warningBanner + templateContent;
   }
 
   formatForSlack(briefContent) {
