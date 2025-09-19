@@ -38,7 +38,42 @@ class BriefGenerator {
     return true;
   }
 
-  async callClaude(prompt) {
+  async callClaude(prompt, maxRetries = 3) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.callClaudeRequest(prompt);
+        return result;
+      } catch (error) {
+        lastError = error;
+
+        // Check if error is retryable (overloaded or rate limit)
+        const isRetryable = error.message.toLowerCase().includes('overloaded') ||
+                          error.message.toLowerCase().includes('rate limit') ||
+                          error.message.includes('429') ||
+                          error.message.includes('529');
+
+        if (isRetryable && attempt < maxRetries) {
+          // Calculate exponential backoff with jitter
+          const baseDelay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+          const jitter = Math.random() * 1000; // 0-1s random jitter
+          const delay = baseDelay + jitter;
+
+          console.log(`⚠️ Claude API overloaded (attempt ${attempt}/${maxRetries}). Retrying in ${Math.round(delay/1000)}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          // Non-retryable error or max retries reached
+          break;
+        }
+      }
+    }
+
+    // If we got here, all retries failed
+    throw lastError;
+  }
+
+  async callClaudeRequest(prompt) {
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify({
         model: this.enableThinking ? 'claude-sonnet-4-20250514' : 'claude-3-5-sonnet-20241022',
@@ -78,7 +113,8 @@ class BriefGenerator {
           try {
             const response = JSON.parse(data);
             if (res.statusCode !== 200) {
-              reject(new Error(`Claude API error: ${response.error?.message || data}`));
+              const errorMessage = response.error?.message || response.error?.type || data;
+              reject(new Error(`Claude API error (${res.statusCode}): ${errorMessage}`));
               return;
             }
             // Log thinking mode usage
@@ -161,7 +197,7 @@ class BriefGenerator {
     };
 
     console.log('🤖 Generating brief with Claude API...');
-    
+
     const fullPrompt = `${this.promptTemplate}
 
 **INPUT DATA:**
@@ -170,15 +206,20 @@ ${JSON.stringify(briefData, null, 2)}`;
     try {
       const briefContent = await this.callClaude(fullPrompt);
       console.log('✅ Brief generated successfully with Claude API');
-      
+
       // Validate the HTML content
       console.log('🔍 Validating HTML structure...');
       const validatedContent = this.validateHtmlContent(briefContent);
       console.log('✅ HTML validation passed');
-      
+
       return validatedContent;
     } catch (error) {
-      console.error('❌ Brief generation failed:', error.message);
+      // Log more specific error information for retry failures
+      if (error.message.toLowerCase().includes('overloaded')) {
+        console.error('❌ Brief generation failed: Claude API is overloaded after multiple retry attempts');
+      } else {
+        console.error('❌ Brief generation failed:', error.message);
+      }
       throw new Error(`Failed to generate brief: ${error.message}`);
     }
   }
