@@ -38,8 +38,9 @@ class BriefGenerator {
     return true;
   }
 
-  async callClaude(prompt, maxRetries = 3) {
+  async callClaude(prompt, maxRetries = 10) {
     let lastError;
+    const twoHoursInMs = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -48,19 +49,39 @@ class BriefGenerator {
       } catch (error) {
         lastError = error;
 
-        // Check if error is retryable (overloaded or rate limit)
-        const isRetryable = error.message.toLowerCase().includes('overloaded') ||
+        // Check if error is 529 (overloaded) - needs special handling
+        const is529Error = error.message.includes('529') ||
+                          error.message.toLowerCase().includes('overloaded');
+
+        // Check if error is retryable (rate limit or other retryable errors)
+        const isRetryable = is529Error ||
                           error.message.toLowerCase().includes('rate limit') ||
-                          error.message.includes('429') ||
-                          error.message.includes('529');
+                          error.message.includes('429');
 
         if (isRetryable && attempt < maxRetries) {
-          // Calculate exponential backoff with jitter
-          const baseDelay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-          const jitter = Math.random() * 1000; // 0-1s random jitter
-          const delay = baseDelay + jitter;
+          let delay;
 
-          console.log(`⚠️ Claude API overloaded (attempt ${attempt}/${maxRetries}). Retrying in ${Math.round(delay/1000)}s...`);
+          if (is529Error) {
+            // For 529 errors, use more aggressive exponential backoff
+            // Start with 30 seconds, double each time, up to 30 minutes max per attempt
+            const baseDelay = 30000 * Math.pow(2, attempt - 1); // 30s, 60s, 2m, 4m, 8m, 16m, 32m...
+            const maxDelayPerAttempt = 30 * 60 * 1000; // Cap at 30 minutes per attempt
+            const clampedDelay = Math.min(baseDelay, maxDelayPerAttempt);
+            const jitter = Math.random() * 5000; // 0-5s random jitter
+            delay = clampedDelay + jitter;
+
+            const delayMinutes = Math.round(delay / 60000);
+            const delaySeconds = Math.round((delay % 60000) / 1000);
+            console.log(`⚠️ Claude API overloaded (529 error, attempt ${attempt}/${maxRetries}). Retrying in ${delayMinutes}m ${delaySeconds}s...`);
+          } else {
+            // For other retryable errors (429 etc), use standard backoff
+            const baseDelay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s, 8s, 16s...
+            const jitter = Math.random() * 1000; // 0-1s random jitter
+            delay = baseDelay + jitter;
+
+            console.log(`⚠️ Claude API error (attempt ${attempt}/${maxRetries}). Retrying in ${Math.round(delay/1000)}s...`);
+          }
+
           await new Promise(resolve => setTimeout(resolve, delay));
         } else {
           // Non-retryable error or max retries reached
