@@ -1,0 +1,167 @@
+name: Weekly Review Generation
+
+on:
+  schedule:
+    # Run at 4:00 PM ET on Sundays (9:00 PM UTC in winter, 8:00 PM UTC in summer)
+    # Using 21:00 UTC to account for EST (UTC-5)
+    - cron: "0 21 * * 0"
+  workflow_dispatch:
+    # Allow manual triggering for testing
+
+jobs:
+  generate-weekly-review:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Weekly Review
+        run: node src/index.js --mode=weekly
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_PERSONAL_REFRESH_TOKEN: ${{ secrets.GOOGLE_PERSONAL_REFRESH_TOKEN }}
+          GOOGLE_WORK_REFRESH_TOKEN: ${{ secrets.GOOGLE_WORK_REFRESH_TOKEN }}
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NODE_ENV: production
+
+      - name: Read Weekly Review Content
+        id: review
+        run: |
+          # Check if HTML file exists
+          if ls output/weekly-review-*.html 1> /dev/null 2>&1; then
+            echo "Found HTML file(s):"
+            ls -la output/weekly-review-*.html
+
+            # Use base64 encoding to preserve HTML content exactly
+            REVIEW_CONTENT=$(cat output/weekly-review-*.html | base64 -w 0)
+            echo "content_base64=$REVIEW_CONTENT" >> $GITHUB_OUTPUT
+            echo "Base64 content length: ${#REVIEW_CONTENT}"
+          else
+            echo "ERROR: No HTML file found in output directory"
+            exit 1
+          fi
+
+      - name: Prepare Email Content
+        id: prepare
+        run: |
+          # Decode the base64 content
+          echo "${{ steps.review.outputs.content_base64 }}" | base64 -d > email_content.html
+
+          # Debug: Show first few lines of HTML content
+          echo "Debug: First 10 lines of HTML content:"
+          head -10 email_content.html
+
+          # Add footer to HTML (insert before closing body tag)
+          sed -i 's|</body>|<hr style="margin: 20px 0; border: none; border-top: 1px solid #ccc;"><p style="font-size: 12px; color: #666; text-align: center;"><small>Generated on: ${{ github.event.head_commit.timestamp }}<br>Workflow run: <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Details</a></small></p></body>|' email_content.html
+
+          # Encode the final HTML content for inline use (avoiding file reference issues)
+          FINAL_HTML_CONTENT=$(cat email_content.html | base64 -w 0)
+          echo "final_html_base64=$FINAL_HTML_CONTENT" >> $GITHUB_OUTPUT
+
+          # Extract date for subject
+          TODAY=$(date +"%B %d, %Y")
+          echo "email_date=$TODAY" >> $GITHUB_OUTPUT
+
+          # Debug: Show final HTML size
+          echo "Final HTML size: $(cat email_content.html | wc -c) characters"
+
+      - name: Decode and Send Email
+        run: |
+          # Decode the final HTML content
+          echo "${{ steps.prepare.outputs.final_html_base64 }}" | base64 -d > final_email.html
+
+          # Debug: Show that we have valid HTML
+          echo "=== Final HTML Content Preview ==="
+          head -5 final_email.html
+          echo "..."
+          tail -5 final_email.html
+          echo "=== End Preview ==="
+
+      - name: Send Weekly Review Email via Python
+        run: |
+          # Create Python email script (inline to avoid file management issues)
+          python3 -c "
+          import smtplib
+          import ssl
+          from email.mime.text import MIMEText
+          from email.mime.multipart import MIMEMultipart
+          import os
+
+          # Read HTML content
+          with open('final_email.html', 'r', encoding='utf-8') as f:
+              html_content = f.read()
+
+          # Email configuration
+          smtp_server = 'smtp.gmail.com'
+          port = 587
+          sender_email = os.environ['GMAIL_USERNAME']
+          password = os.environ['GMAIL_APP_PASSWORD']
+          receiver_email = os.environ['EMAIL_RECIPIENT']
+          subject = 'Sunday Weekly Review'
+
+          print(f'📤 Sending weekly review HTML email...')
+          print(f'   From: {sender_email}')
+          print(f'   To: {receiver_email}')
+          print(f'   Subject: {subject}')
+          print(f'   HTML content length: {len(html_content)} characters')
+
+          # Create message
+          message = MIMEMultipart('alternative')
+          message['Subject'] = subject
+          message['From'] = f'Weekly Review Bot <{sender_email}>'
+          message['To'] = receiver_email
+
+          # Create HTML part
+          html_part = MIMEText(html_content, 'html')
+          message.attach(html_part)
+
+          # Send email
+          context = ssl.create_default_context()
+          with smtplib.SMTP(smtp_server, port) as server:
+              server.starttls(context=context)
+              server.login(sender_email, password)
+              server.sendmail(sender_email, receiver_email, message.as_string())
+
+          print('✅ Weekly review HTML email sent successfully!')
+          "
+        env:
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+
+      - name: Upload Weekly Review as Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-review-${{ github.run_number }}
+          path: |
+            output/
+            *.html
+          retention-days: 30
+
+      - name: Send Notification on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Weekly Review Generation Failed - ${new Date().toDateString()}`,
+              body: `The weekly review generation workflow failed. Please check the logs for details.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });

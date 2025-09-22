@@ -14,27 +14,30 @@ class BriefGenerator {
     if (!this.anthropicApiKey) {
       throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
-    
+
     // Initialize HTML validation
     try {
       console.log('✅ HTML validation schema initialized');
     } catch (error) {
       throw new Error(`Failed to initialize validation: ${error.message}`);
     }
-    
-    // Load prompt template
+
+    // Load prompt templates
     try {
-      const promptPath = path.join(__dirname, '..', '..', 'prompts', 'daily-brief.txt');
-      this.promptTemplate = await fs.readFile(promptPath, 'utf8');
-      
-      const thinkingStatus = this.enableThinking ? 
-        `thinking mode enabled (${this.thinkingTokens} tokens)` : 
+      const dailyPromptPath = path.join(__dirname, '..', '..', 'prompts', 'daily-brief.txt');
+      const weeklyPromptPath = path.join(__dirname, '..', '..', 'prompts', 'weekly-review.txt');
+
+      this.promptTemplate = await fs.readFile(dailyPromptPath, 'utf8');
+      this.weeklyPromptTemplate = await fs.readFile(weeklyPromptPath, 'utf8');
+
+      const thinkingStatus = this.enableThinking ?
+        `thinking mode enabled (${this.thinkingTokens} tokens)` :
         'thinking mode disabled';
-      console.log(`✅ Brief generator initialized with Claude API and prompt template (${thinkingStatus})`);
+      console.log(`✅ Brief generator initialized with Claude API and prompt templates (${thinkingStatus})`);
     } catch (error) {
-      throw new Error(`Failed to load prompt template: ${error.message}`);
+      throw new Error(`Failed to load prompt templates: ${error.message}`);
     }
-    
+
     return true;
   }
 
@@ -259,6 +262,94 @@ ${JSON.stringify(briefData, null, 2)}`;
       console.error('Failed to save brief:', error.message);
       throw error;
     }
+  }
+
+  async generateWeeklyReview(data) {
+    const reviewData = {
+      weekStart: format(data.metadata.weekStart, 'EEEE, MMMM d, yyyy'),
+      weekEnd: format(data.metadata.weekEnd, 'EEEE, MMMM d, yyyy'),
+      generatedAt: format(data.metadata.generatedAt, 'h:mm a'),
+      ...data
+    };
+
+    console.log('🤖 Generating weekly review with Claude API...');
+
+    const fullPrompt = `${this.weeklyPromptTemplate}
+
+**INPUT DATA:**
+${JSON.stringify(reviewData, null, 2)}`;
+
+    try {
+      const reviewContent = await this.callClaude(fullPrompt);
+      console.log('✅ Weekly review generated successfully with Claude API');
+
+      // Validate the HTML content
+      console.log('🔍 Validating HTML structure...');
+      const validatedContent = this.validateHtmlContent(reviewContent);
+      console.log('✅ HTML validation passed');
+
+      return validatedContent;
+    } catch (error) {
+      // Log more specific error information for retry failures
+      if (error.message.toLowerCase().includes('overloaded')) {
+        console.error('❌ Weekly review generation failed: Claude API is overloaded after multiple retry attempts');
+      } else {
+        console.error('❌ Weekly review generation failed:', error.message);
+      }
+      throw new Error(`Failed to generate weekly review: ${error.message}`);
+    }
+  }
+
+  async saveWeeklyReview(reviewContent, filename = null) {
+    try {
+      const defaultFilename = `weekly-review-${format(new Date(), 'yyyy-MM-dd')}.html`;
+      const filepath = path.join(process.cwd(), 'output', filename || defaultFilename);
+
+      await fs.mkdir(path.dirname(filepath), { recursive: true });
+      await fs.writeFile(filepath, reviewContent, 'utf8');
+
+      return filepath;
+    } catch (error) {
+      console.error('Failed to save weekly review:', error.message);
+      throw error;
+    }
+  }
+
+  async generateClaudeInsights(prompt) {
+    console.log('🧠 Generating insights with Claude...');
+
+    try {
+      const insights = await this.callClaude(prompt);
+      console.log('✅ Insights generated successfully');
+
+      // Try to parse as structured insights, fallback to text
+      try {
+        return JSON.parse(insights);
+      } catch {
+        // If not JSON, return as text insights
+        return {
+          keyPriorities: insights.split('\n').filter(line =>
+            line.toLowerCase().includes('priority') || line.toLowerCase().includes('important')
+          ).slice(0, 5),
+          risksAndConflicts: insights.split('\n').filter(line =>
+            line.toLowerCase().includes('risk') || line.toLowerCase().includes('conflict')
+          ).slice(0, 3),
+          scheduleAdjustments: insights.split('\n').filter(line =>
+            line.toLowerCase().includes('schedule') || line.toLowerCase().includes('time')
+          ).slice(0, 3),
+          taskProgressPlan: insights.split('\n').filter(line =>
+            line.toLowerCase().includes('task') || line.toLowerCase().includes('complete')
+          ).slice(0, 3)
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error generating Claude insights:', error.message);
+      throw error;
+    }
+  }
+
+  hasAnthropicKey() {
+    return Boolean(this.anthropicApiKey);
   }
 
   formatForEmail(briefContent) {

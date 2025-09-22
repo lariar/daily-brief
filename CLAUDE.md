@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Daily Brief Generator that integrates with Google Calendar and Todoist to create automated daily briefings. The application runs via GitHub Actions on a daily schedule and generates comprehensive markdown reports with calendar events, tasks, and intelligent analysis.
+This is a Daily Brief Generator that integrates with Google Calendar and Todoist to create automated daily briefings and weekly reviews. The application runs via GitHub Actions on both daily and weekly schedules, generating comprehensive HTML reports with calendar events, tasks, intelligent analysis, and strategic insights.
 
 ## Common Development Commands
 
@@ -16,6 +16,11 @@ npm install
 npm run dev
 # or
 node src/index.js
+
+# Run the weekly review generator
+npm run weekly
+# or
+node src/index.js --mode=weekly
 
 # Run tests
 npm test
@@ -32,6 +37,7 @@ The application follows a service-oriented architecture with clear separation of
 - **CalendarService** (`src/calendar/`): Handles Google Calendar integration for both personal and work accounts
 - **TodoistService** (`src/todoist/`): Manages Todoist API integration and task analysis
 - **BriefGenerator** (`src/briefing/`): Creates the final daily brief content and handles file output
+- **WeeklyReviewService** (`src/weekly/`): Generates comprehensive weekly reviews with strategic insights and availability blocks
 
 ### Key Components
 - **Main Application** (`src/index.js`): Orchestrates all services and handles the application lifecycle
@@ -79,11 +85,24 @@ CLAUDE_THINKING_TOKENS=8000
 
 ## GitHub Actions Integration
 
-The project runs automatically via GitHub Actions (`daily-brief.yml`) at 9:00 AM UTC daily. The workflow:
-- Uses the `anthropics/claude-code-action@v1` to execute the daily brief generation
-- Requires repository secrets for API credentials
-- Uploads generated briefs as workflow artifacts
-- Creates issues on workflow failures for monitoring
+The project runs automatically via GitHub Actions with two workflows:
+
+### Daily Brief (`daily-brief.yml`)
+- Runs at 9:00 AM UTC daily
+- Executes daily brief generation
+- Sends email with HTML-formatted daily briefing
+
+### Weekly Review (`weekly-review.yml`)
+- Runs at 4:00 PM ET on Sundays (9:00 PM UTC)
+- Generates comprehensive weekly reviews with strategic insights
+- Includes availability blocks for weekdays 9-6 ET
+- Analyzes next 7 days of calendar data and 14 days of tasks
+
+Both workflows:
+- Require repository secrets for API credentials
+- Upload generated content as workflow artifacts
+- Create issues on workflow failures for monitoring
+- Send HTML-formatted emails via Gmail SMTP
 
 ## Key Files
 

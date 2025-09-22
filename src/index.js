@@ -3,6 +3,7 @@
 const CalendarService = require('./calendar/calendar-service');
 const TodoistService = require('./todoist/todoist-service');
 const BriefGenerator = require('./briefing/brief-generator');
+const WeeklyReviewService = require('./weekly/weekly-review-service');
 const config = require('./utils/config');
 
 class DailyBriefApp {
@@ -10,6 +11,11 @@ class DailyBriefApp {
     this.calendarService = new CalendarService();
     this.todoistService = new TodoistService(config.todoist.apiToken);
     this.briefGenerator = new BriefGenerator();
+    this.weeklyReviewService = new WeeklyReviewService(
+      this.calendarService,
+      this.todoistService,
+      this.briefGenerator
+    );
   }
 
   async initialize() {
@@ -193,23 +199,71 @@ class DailyBriefApp {
     console.log('');
   }
 
-  async run() {
-    console.log('🌅 Daily Brief Generator');
-    console.log('========================\n');
+  async generateWeeklyReview() {
+    console.log('📊 Generating weekly review...');
 
-    const initialized = await this.initialize();
-    if (!initialized) {
-      process.exit(1);
+    try {
+      const result = await this.weeklyReviewService.generateWeeklyReview();
+
+      if (result.success) {
+        console.log('✅ Weekly review generated successfully!');
+        console.log(`📄 Saved to: ${result.filepath}`);
+        return result;
+      } else {
+        console.log('💥 Weekly review generation failed!');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Failed to generate weekly review:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
     }
+  }
 
-    const result = await this.generateDailyBrief();
-    
-    if (result.success) {
-      console.log('🎉 Daily brief completed successfully!');
-      process.exit(0);
+  async run() {
+    // Check for mode argument
+    const args = process.argv.slice(2);
+    const modeArg = args.find(arg => arg.startsWith('--mode='));
+    const mode = modeArg ? modeArg.split('=')[1] : 'daily';
+
+    if (mode === 'weekly') {
+      console.log('📅 Weekly Review Generator');
+      console.log('==========================\n');
+
+      const initialized = await this.initialize();
+      if (!initialized) {
+        process.exit(1);
+      }
+
+      const result = await this.generateWeeklyReview();
+
+      if (result.success) {
+        console.log('🎉 Weekly review completed successfully!');
+        process.exit(0);
+      } else {
+        console.log('💥 Weekly review generation failed!');
+        process.exit(1);
+      }
     } else {
-      console.log('💥 Daily brief generation failed!');
-      process.exit(1);
+      console.log('🌅 Daily Brief Generator');
+      console.log('========================\n');
+
+      const initialized = await this.initialize();
+      if (!initialized) {
+        process.exit(1);
+      }
+
+      const result = await this.generateDailyBrief();
+
+      if (result.success) {
+        console.log('🎉 Daily brief completed successfully!');
+        process.exit(0);
+      } else {
+        console.log('💥 Daily brief generation failed!');
+        process.exit(1);
+      }
     }
   }
 }
