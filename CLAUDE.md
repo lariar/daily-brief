@@ -25,6 +25,9 @@ node src/index.js --mode=weekly
 # Run tests
 npm test
 
+# Test timezone validation (verify ET conversions are working correctly)
+npm run test-timezone
+
 # Set up OAuth authentication (one-time setup)
 node scripts/oauth-setup.js
 ```
@@ -104,13 +107,34 @@ Both workflows:
 - Create issues on workflow failures for monitoring
 - Send HTML-formatted emails via Gmail SMTP
 
+## Timezone Validation
+
+The application handles timezone conversions for ET (America/New_York). To validate timezone accuracy:
+
+```bash
+# Run comprehensive timezone validation
+npm run test-timezone
+```
+
+This test validates:
+- Basic ET timezone conversions
+- Event timezone handling from Google Calendar
+- Availability calculation accuracy (9 AM - 6 PM ET)
+- Working hours boundary detection
+
+Expected availability format: `Mon: 09:00–10:00 (1h), 14:00–18:00 (4h)`
+
 ## Key Files
 
 - `src/index.js`: Main application entry point and orchestration
 - `src/utils/config.js`: Environment configuration management
+- `src/weekly/weekly-review-service.js`: Weekly review logic and availability calculation
+- `src/test/timezone-validation.js`: Timezone validation utilities
+- `test-timezone.js`: Timezone validation test runner
 - `scripts/oauth-setup.js`: OAuth 2.0 setup utility for Google Calendar
-- `.github/workflows/daily-brief.yml`: Automated workflow configuration
-- `output/`: Directory where generated daily briefs are saved
+- `.github/workflows/daily-brief.yml`: Daily automated workflow
+- `.github/workflows/weekly-review.yml`: Weekly automated workflow
+- `output/`: Directory where generated briefs and reviews are saved
 
 ## Dependencies
 

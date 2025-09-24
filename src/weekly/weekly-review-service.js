@@ -251,6 +251,13 @@ class WeeklyReviewService {
     const availability = {};
     const workingHours = { start: 9, end: 18 }; // 9 AM to 6 PM ET
 
+    // Debug: Log timezone information
+    const debugMode = process.env.NODE_ENV !== 'production';
+    if (debugMode) {
+      console.log(`🕒 Calculating availability for timezone: ${this.timezone}`);
+      console.log(`🕒 Working hours: ${workingHours.start}:00 - ${workingHours.end}:00 ET`);
+    }
+
     // Calculate for next 7 days, weekdays only
     for (let i = 0; i < 7; i++) {
       const date = addDays(new Date(), i);

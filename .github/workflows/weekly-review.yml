@@ -67,7 +67,8 @@ jobs:
           head -10 email_content.html
 
           # Add footer to HTML (insert before closing body tag)
-          sed -i 's|</body>|<hr style="margin: 20px 0; border: none; border-top: 1px solid #ccc;"><p style="font-size: 12px; color: #666; text-align: center;"><small>Generated on: ${{ github.event.head_commit.timestamp }}<br>Workflow run: <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Details</a></small></p></body>|' email_content.html
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          sed -i "s|</body>|<hr style=\"margin: 20px 0; border: none; border-top: 1px solid #ccc;\"><p style=\"font-size: 12px; color: #666; text-align: center;\"><small>Generated on: $TIMESTAMP<br>Workflow run: <a href=\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\">View Details</a></small></p></body>|" email_content.html
 
           # Encode the final HTML content for inline use (avoiding file reference issues)
           FINAL_HTML_CONTENT=$(cat email_content.html | base64 -w 0)

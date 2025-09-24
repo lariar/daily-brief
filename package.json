@@ -8,6 +8,7 @@
     "dev": "node src/index.js",
     "weekly": "node src/index.js --mode=weekly",
     "test": "jest",
+    "test-timezone": "node test-timezone.js",
     "test-email": "node test-email.js",
     "send-test-email": "python3 test-send-email.py"
   },
