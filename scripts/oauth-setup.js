@@ -84,8 +84,13 @@ class OAuthSetup {
 
   async getTokens() {
     console.log('🔄 Getting OAuth tokens for both accounts...\n');
-    
+
     const personalTokens = await this.getTokenForAccount('Personal');
+
+    // Small delay to ensure server is fully closed before starting next one
+    console.log('⏳ Waiting 2 seconds before starting work account authorization...\n');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     const workTokens = await this.getTokenForAccount('Work');
 
     console.log('\n📋 GitHub Secrets Configuration');
@@ -124,13 +129,16 @@ class OAuthSetup {
       console.log(`3. Grant calendar read permissions`);
       console.log(`4. Wait for the authorization to complete...\n`);
 
+      // Create a new server for each account
+      let server = null;
+
       // Setup cleanup function
       const cleanup = () => {
-        if (this.server) {
-          this.server.close(() => {
-            console.log('OAuth server stopped');
+        if (server) {
+          server.close(() => {
+            console.log(`OAuth server stopped for ${accountType} account`);
           });
-          this.server = null;
+          server = null;
         }
       };
 
@@ -140,7 +148,7 @@ class OAuthSetup {
         reject(new Error(`OAuth authorization timed out after 10 minutes for ${accountType} account`));
       }, 10 * 60 * 1000);
 
-      this.server = http.createServer(async (req, res) => {
+      server = http.createServer(async (req, res) => {
         try {
           const parsedUrl = url.parse(req.url, true);
           
@@ -209,11 +217,11 @@ class OAuthSetup {
         }
       });
 
-      this.server.listen(PORT, () => {
+      server.listen(PORT, () => {
         console.log(`🌐 OAuth server started on http://localhost:${PORT}`);
       });
 
-      this.server.on('error', (serverError) => {
+      server.on('error', (serverError) => {
         clearTimeout(timeout);
         cleanup();
         reject(new Error(`Server error: ${serverError.message}`));

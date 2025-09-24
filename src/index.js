@@ -69,16 +69,58 @@ class DailyBriefApp {
   async generateDailyBrief() {
     console.log('📊 Gathering data for daily brief...');
 
+    // Track integration failures
+    const integrationErrors = {
+      calendar: null,
+      todoist: null
+    };
+
     try {
       const [schedule, tasks] = await Promise.all([
-        this.gatherScheduleData(),
-        this.gatherTaskData()
+        this.gatherScheduleData().catch(error => {
+          integrationErrors.calendar = error.message;
+          console.error('📅 Calendar integration failed:', error.message);
+          return {
+            personal: [],
+            work: [],
+            combined: [],
+            analysis: {
+              totalEvents: 0,
+              meetingHours: 0,
+              conflicts: [],
+              busyPeriods: []
+            }
+          };
+        }),
+        this.gatherTaskData().catch(error => {
+          integrationErrors.todoist = error.message;
+          console.error('✅ Todoist integration failed:', error.message);
+          return {
+            today: {
+              tasks: [],
+              analysis: { total: 0, byPriority: { urgent: 0, veryHigh: 0, high: 0, normal: 0 } },
+              byProject: {}
+            },
+            overdue: {
+              tasks: [],
+              analysis: { total: 0, byPriority: { urgent: 0, veryHigh: 0, high: 0, normal: 0 } },
+              byProject: {}
+            },
+            highPriority: {
+              tasks: [],
+              analysis: { total: 0, byPriority: { urgent: 0, veryHigh: 0, high: 0, normal: 0 } },
+              byProject: {}
+            },
+            insights: []
+          };
+        })
       ]);
 
       console.log('🔍 Analyzing data...');
       const briefData = {
         schedule,
-        tasks
+        tasks,
+        integrationErrors // Include error information in brief data
       };
 
       console.log('📝 Generating brief...');
@@ -96,13 +138,15 @@ class DailyBriefApp {
         success: true,
         filepath,
         content: briefContent,
-        data: briefData
+        data: briefData,
+        integrationErrors
       };
     } catch (error) {
       console.error('❌ Failed to generate daily brief:', error.message);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        integrationErrors
       };
     }
   }
@@ -118,17 +162,8 @@ class DailyBriefApp {
       };
     } catch (error) {
       console.error('📅 Error gathering schedule data:', error.message);
-      return {
-        personal: [],
-        work: [],
-        combined: [],
-        analysis: {
-          totalEvents: 0,
-          meetingHours: 0,
-          conflicts: [],
-          busyPeriods: []
-        }
-      };
+      // Propagate the error so it can be caught by the main handler
+      throw new Error(`Calendar integration failed: ${error.message}`);
     }
   }
 
@@ -146,24 +181,8 @@ class DailyBriefApp {
       };
     } catch (error) {
       console.error('✅ Error gathering task data:', error.message);
-      return {
-        today: {
-          tasks: [],
-          analysis: { total: 0, byPriority: { urgent: 0, veryHigh: 0, high: 0, normal: 0 } },
-          byProject: {}
-        },
-        overdue: {
-          tasks: [],
-          analysis: { total: 0, byPriority: { urgent: 0, veryHigh: 0, high: 0, normal: 0 } },
-          byProject: {}
-        },
-        highPriority: {
-          tasks: [],
-          analysis: { total: 0, byPriority: { urgent: 0, veryHigh: 0, high: 0, normal: 0 } },
-          byProject: {}
-        },
-        insights: []
-      };
+      // Propagate the error so it can be caught by the main handler
+      throw new Error(`Todoist integration failed: ${error.message}`);
     }
   }
 
